@@ -4,20 +4,4 @@
     <loc>https://perdafos.my.id/</loc>
     <priority>1.00</priority>
   </url>
-  <url>
-    <loc>https://perdafos.my.id/about</loc>
-    <priority>0.80</priority>
-  </url>
-  <url>
-    <loc>https://perdafos.my.id/projects</loc>
-    <priority>0.80</priority>
-  </url>
-  <url>
-    <loc>https://perdafos.my.id/skills</loc>
-    <priority>0.80</priority>
-  </url>
-  <url>
-    <loc>https://perdafos.my.id/contact</loc>
-    <priority>0.80</priority>
-  </url>
 </urlset>

@@ -21,7 +21,7 @@ interface LyricLine {
 
 interface QueueItem extends Song {}
 
-export function MusicPage({ onBack }: { onBack: () => void }) {
+export function MusicPage() {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<Song[]>([])
   const [loading, setLoading] = useState(false)
@@ -44,30 +44,11 @@ export function MusicPage({ onBack }: { onBack: () => void }) {
 
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
+  const queueRef = useRef<QueueItem[]>([])
+  const playSongRef = useRef<(song: Song) => Promise<void>>(async () => undefined)
 
   useEffect(() => {
     searchInputRef.current?.focus()
-  }, [])
-
-  useEffect(() => {
-    const audio = new Audio()
-    audio.volume = volume
-    audioRef.current = audio
-
-    const handleTimeUpdate = () => setCurrentTime(audio.currentTime)
-    const handleLoadedMetadata = () => setDuration(audio.duration || 0)
-    const handleEnded = () => handleNext()
-
-    audio.addEventListener('timeupdate', handleTimeUpdate)
-    audio.addEventListener('loadedmetadata', handleLoadedMetadata)
-    audio.addEventListener('ended', handleEnded)
-
-    return () => {
-      audio.removeEventListener('timeupdate', handleTimeUpdate)
-      audio.removeEventListener('loadedmetadata', handleLoadedMetadata)
-      audio.removeEventListener('ended', handleEnded)
-      audio.pause()
-    }
   }, [])
 
   useEffect(() => {
@@ -92,7 +73,7 @@ export function MusicPage({ onBack }: { onBack: () => void }) {
       } else {
         setError(data.message || 'Tidak ada hasil')
       }
-    } catch (err) {
+    } catch {
       setError('Gagal mencari lagu. Pastikan server berjalan.')
     } finally {
       setLoading(false)
@@ -123,7 +104,7 @@ export function MusicPage({ onBack }: { onBack: () => void }) {
       } else {
         setError('Gagal memuat audio untuk lagu ini')
       }
-    } catch (err) {
+    } catch {
       setError('Gagal memuat audio')
     } finally {
       setAudioLoading(false)
@@ -141,7 +122,7 @@ export function MusicPage({ onBack }: { onBack: () => void }) {
       } else {
         setLyrics([])
       }
-    } catch (err) {
+    } catch {
       setLyrics([])
     } finally {
       setLyricsLoading(false)
@@ -159,21 +140,62 @@ export function MusicPage({ onBack }: { onBack: () => void }) {
     }
   }
 
+  useEffect(() => {
+    playSongRef.current = playSong
+  })
+
+  useEffect(() => {
+    const audio = new Audio()
+    audio.volume = 0.8
+    audioRef.current = audio
+
+    const handleTimeUpdate = () => setCurrentTime(audio.currentTime)
+    const handleLoadedMetadata = () => setDuration(audio.duration || 0)
+    const handleEnded = () => {
+      const [next, ...rest] = queueRef.current
+      if (!next) {
+        setIsPlaying(false)
+        return
+      }
+
+      queueRef.current = rest
+      setQueue(rest)
+      void playSongRef.current(next)
+    }
+
+    audio.addEventListener('timeupdate', handleTimeUpdate)
+    audio.addEventListener('loadedmetadata', handleLoadedMetadata)
+    audio.addEventListener('ended', handleEnded)
+
+    return () => {
+      audio.removeEventListener('timeupdate', handleTimeUpdate)
+      audio.removeEventListener('loadedmetadata', handleLoadedMetadata)
+      audio.removeEventListener('ended', handleEnded)
+      audio.pause()
+      audioRef.current = null
+    }
+  }, [])
+
   const addToQueue = (song: Song) => {
-    setQueue((prev) => {
-      if (prev.find((item) => item.videoId === song.videoId)) return prev
-      return [...prev, song]
+    setQueue((previousQueue) => {
+      if (previousQueue.some((item) => item.videoId === song.videoId)) return previousQueue
+
+      const nextQueue = [...previousQueue, song]
+      queueRef.current = nextQueue
+      return nextQueue
     })
   }
 
   const handleNext = () => {
-    if (queue.length > 0) {
-      const [next, ...rest] = queue
-      setQueue(rest)
-      playSong(next)
-    } else {
+    const [next, ...rest] = queueRef.current
+    if (!next) {
       setIsPlaying(false)
+      return
     }
+
+    queueRef.current = rest
+    setQueue(rest)
+    void playSong(next)
   }
 
   const handlePrev = () => {
@@ -271,15 +293,6 @@ export function MusicPage({ onBack }: { onBack: () => void }) {
                 <p className="text-[0.65rem] uppercase tracking-widest text-white/60">Streaming Music Interface</p>
               </div>
             </div>
-
-            <button
-              type="button"
-              onClick={onBack}
-              className="flex h-9 w-9 -skew-x-12 items-center justify-center border-2 border-white bg-black text-white shadow-[2px_2px_0_#e60012] transition hover:bg-white hover:text-black"
-              title="Back"
-            >
-              <X size={18} className="skew-x-12" />
-            </button>
           </header>
 
           {/* Search */}
@@ -528,18 +541,18 @@ export function MusicPage({ onBack }: { onBack: () => void }) {
                 </div>
               </div>
 
-              <div className="hidden items-center gap-2 md:flex md:w-1/4 md:justify-end">
+              <div className="flex items-center justify-center gap-2 md:w-1/4 md:justify-end">
                 <button
                   type="button"
                   onClick={() => setShowLyrics(!showLyrics)}
-                  className={`flex h-8 items-center gap-1 border px-2 text-xs font-bold uppercase transition ${showLyrics ? 'border-[#e60012] bg-[#e60012] text-white' : 'border-white/30 text-white hover:bg-white hover:text-black'}`}
+                  className={`flex h-8 items-center gap-1 border px-2 text-xs font-bold uppercase transition md:hidden ${showLyrics ? 'border-[#e60012] bg-[#e60012] text-white' : 'border-white/30 text-white hover:bg-white hover:text-black'}`}
                 >
                   <Mic2 size={12} /> Lirik
                 </button>
                 <button
                   type="button"
                   onClick={() => setShowQueue(!showQueue)}
-                  className={`flex h-8 items-center gap-1 border px-2 text-xs font-bold uppercase transition ${showQueue ? 'border-[#00A6E8] bg-[#00A6E8] text-white' : 'border-white/30 text-white hover:bg-white hover:text-black'}`}
+                  className={`flex h-8 items-center gap-1 border px-2 text-xs font-bold uppercase transition md:hidden ${showQueue ? 'border-[#00A6E8] bg-[#00A6E8] text-white' : 'border-white/30 text-white hover:bg-white hover:text-black'}`}
                 >
                   <ListMusic size={12} /> Antrian
                 </button>
@@ -547,6 +560,7 @@ export function MusicPage({ onBack }: { onBack: () => void }) {
                   type="button"
                   onClick={() => setIsMuted(!isMuted)}
                   className="flex h-8 w-8 items-center justify-center border border-white/30 text-white transition hover:bg-white hover:text-black"
+                  aria-label={isMuted ? 'Nyalakan suara' : 'Matikan suara'}
                 >
                   {isMuted ? <VolumeX size={14} /> : <Volume2 size={14} />}
                 </button>
@@ -557,8 +571,9 @@ export function MusicPage({ onBack }: { onBack: () => void }) {
                   step={0.05}
                   value={volume}
                   onChange={(e) => setVolume(Number(e.target.value))}
-                  className="h-1 w-20 cursor-pointer appearance-none bg-neutral-800"
+                  className="hidden h-1 w-20 cursor-pointer appearance-none bg-neutral-800 sm:block"
                   style={{ accentColor: '#e60012' }}
+                  aria-label="Volume"
                 />
               </div>
             </div>
